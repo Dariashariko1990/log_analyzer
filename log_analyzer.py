@@ -3,6 +3,7 @@ import gzip
 import json
 import os
 import re
+import shutil
 import sys
 from collections import namedtuple, defaultdict
 import datetime as dt
@@ -11,10 +12,11 @@ from imp import load_source
 from operator import attrgetter
 from string import Template
 import logging
+import tempfile
 
 TEMPLATE = 'report.html'
 
-config = {
+DEFAULT_CONFIG = {
     "REPORT_SIZE": 1000,
     "REPORT_DIR": "./reports/",
     "LOG_DIR": "./log/",
@@ -37,7 +39,6 @@ LogStats = namedtuple("LogStat", [
 ],
                       )
 
-logging.basicConfig(filename=None, level=logging.INFO, format='[%(asctime)s] %(levelname).1s %(message)s')
 
 parser = argparse.ArgumentParser(description="Passing config path")
 parser.add_argument(
@@ -47,13 +48,14 @@ parser.add_argument(
 )
 
 
-def update_config(config_path):
+def update_config(config_path, config):
     """Update default config dict from config file.
     :param config_path: path to config file
     :return: config dict
     """
-    global config
-    config = load_source('config', config_path).config
+
+    config_fromfile = load_source('config', config_path).config
+    config = {**config, **config_fromfile}
     return config
 
 
@@ -62,6 +64,9 @@ def find_most_recent_log(directory):
     :param directory: logs directory
     :return: LogFile named tuple
     """
+    if not os.path.isdir(directory):
+        logging.info("Invalid log directory, no such directory.")
+        sys.exit(-1)
 
     most_recent_date = None
     most_recent_file = None
@@ -183,27 +188,24 @@ def render_template(url_stats):
     return rendered_template
 
 
-def check_report_exists(report_path):
-    """Check if report for the most recent log already exists.
-     :param report_path: path for report file
-     """
-    return True if os.path.exists(report_path) else False
-
-
 def write_report(rendered_template, report_path):
     """Write report to file.
     :param rendered_template: template string
     :param report_path: path for report file
     """
-    with open(report_path, "wb") as f:
+    tmp = tempfile.NamedTemporaryFile()
+    with open(tmp.name, 'wb') as f:
         f.write(rendered_template.encode("utf-8"))
+        with open(report_path, 'wb') as f:
+           shutil.copyfileobj(tmp, f)
 
-
-if __name__ == "__main__":
-
+def main():
     args = parser.parse_args()
     if args.config_path:
-        update_config(args.config_path)
+        config = update_config(args.config_path, DEFAULT_CONFIG)
+
+    log_file = config["LOG_FILE"] if "LOG_FILE" in config else None
+    logging.basicConfig(filename=log_file, level=logging.INFO, format='[%(asctime)s] %(levelname).1s %(message)s')
 
     log = find_most_recent_log(config["LOG_DIR"])
 
@@ -215,15 +217,27 @@ if __name__ == "__main__":
         report_filename = log.date.strftime("report-%Y.%m.%d.html")
         report_path = os.path.abspath(os.path.join(config["REPORT_DIR"], report_filename))
 
-        if check_report_exists(report_path):
-            logging.info("The most recent report already exists./n Script completed.")
-            sys.exit(-1)
+        if not os.path.isdir(config["REPORT_DIR"]):
+            os.mkdir(os.path.abspath(config["REPORT_DIR"]))
+
+        if os.path.exists(report_path):
+            logging.info("The most recent report already exists. Script completed.")
+            sys.exit(0)
         else:
             dict_url, time_all = count_url(log)
             url_stat = count_url_stats(dict_url, time_all)
             rendered_template = render_template(url_stat)
             write_report(rendered_template, report_path)
+            logging.info("Report has been successfully generated and written to a file.")
+            logging.info("Script completed.")
     except Exception as exc:
         logging.exception(exc)
 
-    logging.info("Script completed.")
+
+if __name__ == "__main__":
+    try:
+        main()
+    except Exception as exc:
+        logging.exception(exc)
+    except KeyboardInterrupt:
+        logging.info("KeyboardInterrupt has been caught.")
