@@ -39,7 +39,6 @@ LogStats = namedtuple("LogStat", [
 ],
                       )
 
-
 parser = argparse.ArgumentParser(description="Passing config path")
 parser.add_argument(
     "--config",
@@ -197,7 +196,8 @@ def write_report(rendered_template, report_path):
     with open(tmp.name, 'wb') as f:
         f.write(rendered_template.encode("utf-8"))
         with open(report_path, 'wb') as f:
-           shutil.copyfileobj(tmp, f)
+            shutil.copyfileobj(tmp, f)
+
 
 def main():
     args = parser.parse_args()

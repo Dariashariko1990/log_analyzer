@@ -24,7 +24,7 @@ config = {
 и записывает его в REPORT_DIR. 
    
 ## Про логи:
-Cемпл лога: nginx-access-ui.log-20170630.gz  
+Cемпл лога: [nginx-access-ui.log-20170630.gz](https://cloud.mail.ru/public/ynsh/abS6uF7L4)  
 Логи могут быть и plain и gzip.  
 
 ## Про отчет:
